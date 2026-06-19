@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Depodaki ham alkol ürünleri (Beefeater Gin, Hendricks, Grey Goose vb.)
+model DepotProduct {
+  id           Int          @id @default(autoincrement())
+  name         String       @unique
+  unit         String       @default("cl")
+  createdAt    DateTime     @default(now())
+  recipes      Recipe[]
+  stockEntries StockEntry[]
+  barCounts    BarCount[]
+}
+
+// Simpra'dan gelen satış ürünleri (KDH Beefeater, Passion Martini vb.)
+model SimpraProduct {
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  category   String?
+  recipes    Recipe[]
+  salesItems SalesItem[]
+}
+
+// Reçete: Simpra ürünü → Depo ürünü + CL miktarı
+model Recipe {
+  id              Int           @id @default(autoincrement())
+  simpraProductId Int
+  depotProductId  Int
+  clAmount        Float
+  simpraProduct   SimpraProduct @relation(fields: [simpraProductId], references: [id])
+  depotProduct    DepotProduct  @relation(fields: [depotProductId], references: [id])
+
+  @@unique([simpraProductId, depotProductId])
+}
+
+// Simpra xlsx yükleme kaydı
+model SimpraImport {
+  id         Int         @id @default(autoincrement())
+  fileName   String
+  startDate  DateTime
+  endDate    DateTime
+  importedAt DateTime    @default(now())
+  salesItems SalesItem[]
+}
+
+// Simpra satış satırları
+model SalesItem {
+  id              Int           @id @default(autoincrement())
+  importId        Int
+  simpraProductId Int
+  businessDate    DateTime
+  netSalesQty     Float
+  grossSalesQty   Float
+  import          SimpraImport  @relation(fields: [importId], references: [id], onDelete: Cascade)
+  simpraProduct   SimpraProduct @relation(fields: [simpraProductId], references: [id])
+}
+
+// Haftalık dönem
+model Period {
+  id           Int          @id @default(autoincrement())
+  label        String
+  startDate    DateTime
+  endDate      DateTime
+  createdAt    DateTime     @default(now())
+  stockEntries StockEntry[]
+  barCounts    BarCount[]
+}
+
+// Stok girişi: dönem başı depo stoğu + gelen malzeme
+model StockEntry {
+  id             Int          @id @default(autoincrement())
+  periodId       Int
+  depotProductId Int
+  openingCl      Float
+  incomingCl     Float        @default(0)
+  period         Period       @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  depotProduct   DepotProduct @relation(fields: [depotProductId], references: [id])
+
+  @@unique([periodId, depotProductId])
+}
+
+// Bar sayımı: dönem sonu gerçek sayım
+model BarCount {
+  id             Int          @id @default(autoincrement())
+  periodId       Int
+  depotProductId Int
+  countedCl      Float
+  countedAt      DateTime     @default(now())
+  period         Period       @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  depotProduct   DepotProduct @relation(fields: [depotProductId], references: [id])
+
+  @@unique([periodId, depotProductId])
+}
+
